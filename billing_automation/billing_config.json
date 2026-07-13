@@ -1,0 +1,119 @@
+{
+  "_comment": "Utility Billing Automation — configuration. Replace placeholders with your real values. Secrets (api_key, etc.) should be set via .env / environment variables, NOT committed here.",
+  "_note_on_splits": "Splits are NOT defined in this config. The script writes raw bill amounts to the spreadsheet, then reads back the spreadsheet's computed Tenant Share row. To change a split, edit the formulas in the spreadsheet itself. The spreadsheet is the single source of truth.",
+
+  "tenant_name": "Sample Tenant",
+  "tenant_email_to": "tenant@example.com",
+  "tenant_email_cc": "",
+  "tenant_email_greeting": "Hi Sample Tenant,",
+  "tenant_email_body_template": "Here are {month}'s utilities. Thank you!",
+  "tenant_email_signoff_lines": [
+    "Best,",
+    "",
+    "Your Name",
+    "you@example.com",
+    "Your City, ST | 555.555.5555"
+  ],
+
+  "landlord_name": "Your Name",
+  "landlord_email": "you@example.com",
+  "landlord_phone": "555.555.5555",
+
+  "property_billing_address": "123 Main St Unit A",
+  "property_short_id": "123_Main_St",
+  "landlord_contact_address": "123 Main St Unit B",
+
+  "spreadsheet_path": "./Master_Monthly_Utilities_Template.xlsx",
+  "spreadsheet_sheet_name": "Monthly Utilities 2026",
+  "invoice_output_dir": "./",
+
+  "payment_due_days": 7,
+
+  "synopsis_recipient": "you@example.com",
+  "gmail_account": "you@example.com",
+
+  "azure_openai": {
+    "_comment": "API key and endpoint should be set via environment variables AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT. Values here are fallbacks only — leave blank in committed config.",
+    "endpoint": "",
+    "api_key": "",
+    "deployment": "gpt-4o-mini",
+    "_deployment_rationale": "Mini-class model is sufficient for the two LLM tasks: (1) extracting a single dollar amount from a marketing-style HTML email; (2) writing 4-6 sentences of variance commentary. Larger models add cost without measurable quality gain for these tasks.",
+    "api_version": "2024-12-01-preview"
+  },
+
+  "analysis": {
+    "_comment": "Tunable anomaly thresholds. Edit these to taste.",
+    "mom_change_alert_pct": 25,
+    "zscore_alert_threshold": 2.0,
+    "history_window_months": 6,
+    "expected_bill_day_of_month": 18,
+    "missing_bill_grace_days": 5
+  },
+
+  "utility_keys_in_order": [
+    "electricity",
+    "gas",
+    "internet",
+    "garbage",
+    "pet_waste",
+    "water_sewer"
+  ],
+
+  "utility_labels": {
+    "electricity": "Electricity",
+    "gas":         "Natural Gas",
+    "internet":    "Internet",
+    "garbage":     "Garbage",
+    "pet_waste":   "Pet Waste Removal",
+    "water_sewer": "Water/Sewer"
+  },
+
+  "spreadsheet_columns": {
+    "_comment": "Column letters in the spreadsheet. Update if you ever rearrange the sheet.",
+    "electricity": "B",
+    "gas":         "C",
+    "internet":    "D",
+    "garbage":     "E",
+    "pet_waste":   "F",
+    "water_sewer": "G",
+    "tenant_owes": "H",
+    "notes":       "I",
+    "landlord_cost": "J",
+    "total":       "K"
+  },
+
+  "gmail_searches": {
+    "_comment": "Each utility maps to a Gmail filter that finds its monthly bill. sender = from: filter. must_contain = arbitrary text that must appear in body/subject (use to disambiguate when you have multiple accounts with the same provider). subject_must_contain = restricted to subject. amount_pattern is a regex fallback used when Azure OpenAI is unavailable.",
+    "electricity": {
+      "sender": "billing@your-electric-provider.example",
+      "amount_pattern": "\\$([\\d,]+\\.\\d{2})",
+      "notes": "Replace sender with your actual electricity provider's billing email."
+    },
+    "gas": {
+      "sender": "noreply@your-gas-provider.example",
+      "must_contain": "",
+      "amount_pattern": "\\$([\\d,]+\\.\\d{2})",
+      "notes": "If you have multiple accounts with the same provider, use must_contain to disambiguate (e.g., last 4 of account number)."
+    },
+    "internet": {
+      "sender": "billing@your-internet-provider.example",
+      "amount_pattern": "\\$([\\d,]+\\.\\d{2})",
+      "notes": "Replace with your internet provider's billing email."
+    },
+    "garbage": {
+      "sender": "billing@your-waste-provider.example",
+      "amount_pattern": "Invoice Amount[^\\d]+(\\d[\\d,]*\\.\\d{2})",
+      "notes": "Many waste providers send marketing emails alongside invoice emails. Filter on the invoice-specific sender, not the marketing one."
+    },
+    "water_sewer": {
+      "sender": "no-reply@your-water-provider.example",
+      "subject_must_contain": "Notification",
+      "amount_pattern": "balance due[^\\d]+\\$?([\\d,]+\\.\\d{2})",
+      "notes": "Many municipal water systems use vendors like InvoiceCloud which send multiple email types (Notification, Reminder, Payment Confirmation). subject_must_contain restricts to the new-invoice notification only."
+    },
+    "pet_waste": {
+      "_skip": true,
+      "_note": "Set _skip: true for any utility you don't actually have. The script will not look for a bill for it."
+    }
+  }
+}

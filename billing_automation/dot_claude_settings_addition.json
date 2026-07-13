@@ -1,0 +1,13 @@
+{
+  "_instructions": "Add the 'mcpServers' block below to ~/.claude/settings.json. If settings.json doesn't exist yet, create it with exactly this content (remove this _instructions key first). Update the PATH_TO_BILLING_AUTOMATION placeholder with the actual path to the billing_automation folder on your Mac.",
+
+  "mcpServers": {
+    "gmail-personal": {
+      "command": "python3",
+      "args": [
+        "PATH_TO_BILLING_AUTOMATION/gmail_mcp_server.py"
+      ],
+      "env": {}
+    }
+  }
+}

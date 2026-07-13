@@ -1,0 +1,68 @@
+GOOGLE CLOUD OAUTH SETUP — your-email@gmail.com
+====================================================
+This is a one-time setup. Takes about 10 minutes.
+
+STEP 1: Create a Google Cloud Project
+──────────────────────────────────────
+1. Go to https://console.cloud.google.com
+2. Sign in as your-email@gmail.com
+3. Click the project selector at top → "New Project"
+4. Name it: "My Billing Project"
+5. Click "Create"
+
+STEP 2: Enable the Gmail API
+──────────────────────────────────────
+1. In the left menu: "APIs & Services" → "Library"
+2. Search for "Gmail API"
+3. Click it → Click "Enable"
+
+STEP 3: Configure OAuth Consent Screen
+──────────────────────────────────────
+(Google requires this even for personal use)
+1. "APIs & Services" → "OAuth consent screen"
+2. Select "External" → Click "Create"
+3. Fill in:
+   - App name: "My Billing Project"
+   - User support email: your-email@gmail.com
+   - Developer contact: your-email@gmail.com
+4. Click "Save and Continue" through all steps
+5. On "Test users" step → Add: your-email@gmail.com
+6. Click "Save and Continue" → "Back to Dashboard"
+
+STEP 4: Create OAuth Credentials
+──────────────────────────────────────
+1. "APIs & Services" → "Credentials"
+2. Click "+ Create Credentials" → "OAuth client ID"
+3. Application type: "Desktop app"
+4. Name: "My Billing Project Script"
+5. Click "Create"
+6. Click "Download JSON" on the popup
+7. Rename the downloaded file to: credentials.json
+8. Move it to this folder:
+   ~/Library/CloudStorage/OneDrive-Personal/Rental Billing Templates/billing_automation/
+
+STEP 5: Run the Auth Flow (one time)
+──────────────────────────────────────
+1. Open Terminal
+2. cd to the billing_automation folder
+3. Run: python3 run_billing.py --auth
+4. A browser window will open → sign in as your-email@gmail.com
+5. Click "Allow" when asked for Gmail permissions
+6. Terminal will show "✓ Gmail authenticated!"
+
+That's it. From now on, just run:
+    python3 run_billing.py
+
+And it will read bills from Gmail automatically.
+
+────────────────────────────────────────────────────
+TROUBLESHOOTING
+────────────────────────────────────────────────────
+• "This app isn't verified" warning from Google → Click "Advanced" → "Go to My Billing Project (unsafe)"
+  This is normal for personal-use apps that haven't gone through Google's review process.
+  It's your own app accessing your own Gmail — completely safe.
+
+• Token expired → Run: python3 run_billing.py --auth again to refresh
+
+• Missing dependencies → Run:
+  pip3 install reportlab openpyxl google-api-python-client google-auth-oauthlib

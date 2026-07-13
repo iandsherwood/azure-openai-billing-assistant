@@ -1,0 +1,47 @@
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+billing_automation/credentials.json
+billing_automation/gmail_token.pickle
+billing_automation/*.pickle
+billing_automation/secrets/
+
+# Generated outputs
+billing_automation/*.pdf
+*.pdf
+!docs/**/*.pdf
+!samples/**/*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Spreadsheet temp files (Excel + iCloud sometimes spawn these)
+~$*
+*.MACTF
+
+# Logs
+*.log
+
+# One-time setup script, not part of the project
+push_to_github.sh
