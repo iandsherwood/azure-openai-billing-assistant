@@ -22,6 +22,25 @@ The system has been running in production since April 2026 and bills a real tena
 
 ---
 
+## Who built what
+
+I'm not a software engineer. I take my first Python class this fall. I built this with heavy AI assistance (Claude), and I'd rather say so plainly than let you assume otherwise.
+
+Here's the honest split:
+
+| I did | AI did |
+|---|---|
+| Provisioned the Azure OpenAI resource; chose the deployment and model | Wrote the API client |
+| Configured the Google Cloud project, OAuth consent screen, scopes, token lifecycle | Wrote the Gmail auth flow |
+| Designed the spreadsheet as the single source of truth for split logic | Wrote the AST formula evaluator |
+| Decided the system fails closed and never auto-sends | Wrote the alert paths |
+| Diagnosed the silent scheduler failure (see below) | Wrote the TTY guard |
+| Designed the invoice, the step sequencing, and the human review gate | Wrote the ReportLab code |
+
+The code was the easy part to obtain. The decisions were not. Everything interesting in this repo — the source-of-truth choice, the fail-stop behavior, the model selection, the human-in-the-loop gate — is a judgment call about consequences, not a coding problem.
+
+---
+
 ## The problem
 
 Five utility providers. Five email formats. Five marketing-laden HTML templates that bury the dollar amount inside nested tables. Once a month, a landlord (me) burns ~45 minutes copying amounts into a spreadsheet, computing a custom split (some utilities 50/50, some 100% tenant, water capped at $125), and writing the tenant a polite email with the PDF attached.
