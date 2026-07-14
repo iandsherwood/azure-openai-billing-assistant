@@ -153,7 +153,7 @@ When run on the demo spreadsheet shipped in this repo, the synopsis email reads 
 ### Install
 
 ```bash
-git clone https://github.com/bubbysherwood/azure-openai-billing-assistant.git
+git clone https://github.com/iandsherwood/azure-openai-billing-assistant.git
 cd azure-openai-billing-assistant
 pip install -r requirements.txt
 cp .env.example .env
