@@ -22,22 +22,11 @@ The system has been running in production since April 2026 and bills a real tena
 
 ---
 
-## Who built what
+## A note on how this was built
 
-I'm not a software engineer. I take my first Python class this fall. I built this with heavy AI assistance (Claude), and I'd rather say so plainly than let you assume otherwise.
+Claude wrote most of the Python here. I'm not a software engineer and I take my first Python class this fall, so it seems worth saying rather than letting you assume otherwise.
 
-Here's the honest split:
-
-| I did | AI did |
-|---|---|
-| Provisioned the Azure OpenAI resource; chose the deployment and model | Wrote the API client |
-| Configured the Google Cloud project, OAuth consent screen, scopes, token lifecycle | Wrote the Gmail auth flow |
-| Designed the spreadsheet as the single source of truth for split logic | Wrote the AST formula evaluator |
-| Decided the system fails closed and never auto-sends | Wrote the alert paths |
-| Diagnosed the silent scheduler failure (see below) | Wrote the TTY guard |
-| Designed the invoice, the step sequencing, and the human review gate | Wrote the ReportLab code |
-
-The code was the easy part to obtain. The decisions were not. Everything interesting in this repo — the source-of-truth choice, the fail-stop behavior, the model selection, the human-in-the-loop gate — is a judgment call about consequences, not a coding problem.
+What I did bring: the Azure OpenAI setup and model choice, the Google Cloud OAuth configuration, the decision to keep the split logic in spreadsheet formulas instead of code, the decision that the system never sends an email on its own, and the diagnosis of the scheduler failure described below. The code was the easy part to get. The decisions about what this thing should do when it's uncertain — those took longer, and they're the only parts I'd defend.
 
 ---
 
