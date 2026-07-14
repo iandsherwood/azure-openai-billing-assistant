@@ -1,4 +1,4 @@
-GOOGLE CLOUD OAUTH SETUP — your-email@gmail.com
+GOOGLE CLOUD OAUTH SETUP, your-email@gmail.com
 ====================================================
 This is a one-time setup. Takes about 10 minutes.
 
@@ -60,7 +60,7 @@ TROUBLESHOOTING
 ────────────────────────────────────────────────────
 • "This app isn't verified" warning from Google → Click "Advanced" → "Go to My Billing Project (unsafe)"
   This is normal for personal-use apps that haven't gone through Google's review process.
-  It's your own app accessing your own Gmail — completely safe.
+  It's your own app accessing your own Gmail, completely safe.
 
 • Token expired → Run: python3 run_billing.py --auth again to refresh
 

@@ -110,7 +110,7 @@ def setup_fonts() -> tuple[str, str]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SPREADSHEET — write raw amounts, evaluate formulas to compute tenant shares
+# SPREADSHEET, write raw amounts, evaluate formulas to compute tenant shares
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Safe formula evaluator: parses arithmetic expressions from spreadsheet
@@ -279,7 +279,7 @@ def read_tenant_shares(
             per_utility[utility_key] = 0.0
             continue
         if isinstance(formula, (int, float)):
-            # Hardcoded value in tenant share row (e.g., G4 = 80 — capped manually)
+            # Hardcoded value in tenant share row (e.g., G4 = 80, capped manually)
             per_utility[utility_key] = float(formula)
             continue
         if not isinstance(formula, str) or not formula.startswith("="):
@@ -347,7 +347,7 @@ def read_history(workbook_path: Path, sheet_name: str, data_row: int, config: di
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ANALYSIS — anomaly detection + LLM commentary
+# ANALYSIS, anomaly detection + LLM commentary
 # ══════════════════════════════════════════════════════════════════════════════
 
 def analyze_bills(current: dict, history: list[dict], config: dict) -> dict:
@@ -456,18 +456,18 @@ def azure_commentary(analysis: dict, billing_month: date, config: dict) -> str:
 
     digest = "\n".join(lines)
     season_hint = {
-        12: "Winter — high heating gas use expected.",
-        1: "Winter — high heating gas use expected.",
-        2: "Winter — high heating gas use expected.",
-        3: "End of heating season — gas should begin dropping.",
-        4: "Spring — gas should drop sharply, water/electric stable.",
-        5: "Spring — heating off, possible AC ramp.",
-        6: "Summer — AC ramps up; gas minimal.",
-        7: "Summer peak — high electricity expected for AC.",
-        8: "Summer peak — high electricity expected for AC.",
-        9: "Early fall — electricity drops, gas still off.",
-        10: "Fall — gas may start rising.",
-        11: "Fall/early winter — gas climbs.",
+        12: "Winter, high heating gas use expected.",
+        1: "Winter, high heating gas use expected.",
+        2: "Winter, high heating gas use expected.",
+        3: "End of heating season, gas should begin dropping.",
+        4: "Spring, gas should drop sharply, water/electric stable.",
+        5: "Spring, heating off, possible AC ramp.",
+        6: "Summer, AC ramps up; gas minimal.",
+        7: "Summer peak, high electricity expected for AC.",
+        8: "Summer peak, high electricity expected for AC.",
+        9: "Early fall, electricity drops, gas still off.",
+        10: "Fall, gas may start rising.",
+        11: "Fall/early winter, gas climbs.",
     }.get(billing_month.month, "")
 
     prompt = f"""You are reviewing a landlord's monthly utility bills for a rental property.
@@ -620,7 +620,7 @@ def generate_invoice_pdf(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GMAIL — read bills (Azure-first) + create drafts (replaces Apple Mail)
+# GMAIL, read bills (Azure-first) + create drafts (replaces Apple Mail)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _decode_body(payload: dict) -> str:
@@ -673,11 +673,11 @@ def _get_azure_client(config: dict):
 
 
 def _extract_amount_azure(body: str, label: str, client, deployment: str, snippet: str = "") -> float | None:
-    # Strip <style> and <script> blocks first — they hog truncation budget
+    # Strip <style> and <script> blocks first, they hog truncation budget
     # without containing any actual bill content.
     no_style = re.sub(r"<style\b[^>]*>.*?</style>", " ", body, flags=re.DOTALL | re.IGNORECASE)
     no_style = re.sub(r"<script\b[^>]*>.*?</script>", " ", no_style, flags=re.DOTALL | re.IGNORECASE)
-    # Strip <head> entirely — it's all metadata, no bill content
+    # Strip <head> entirely, it's all metadata, no bill content
     no_head = re.sub(r"<head\b[^>]*>.*?</head>", " ", no_style, flags=re.DOTALL | re.IGNORECASE)
     # Decode HTML entities before tag-stripping so &#36;251.60 → $251.60
     clean = html_lib.unescape(no_head)
@@ -699,7 +699,7 @@ def _extract_amount_azure(body: str, label: str, client, deployment: str, snippe
         f"You are reading a utility bill email for {label}.\n\n"
         f"Return the SINGLE NUMERIC AMOUNT the customer actually owes/paid for this billing period.\n\n"
         f"Rules:\n"
-        f"- Pick the bill total, balance due, payment amount, or amount due — NOT retail price, NOT discount/savings, NOT $0.00 placeholders, NOT 'last month' references.\n"
+        f"- Pick the bill total, balance due, payment amount, or amount due, NOT retail price, NOT discount/savings, NOT $0.00 placeholders, NOT 'last month' references.\n"
         f"- If there are multiple amounts (retail, discount, total, etc.), pick the one labeled as 'total', 'amount due', 'balance due', 'amount billed', or 'amount charged'.\n"
         f"- Reply with ONLY the numeric value: e.g., 57.18 (no dollar sign, no commas, no explanation).\n"
         f"- If you genuinely cannot determine the amount, reply exactly: NULL\n\n"
@@ -773,7 +773,7 @@ def read_bills_from_gmail(billing_month: date, config: dict) -> dict | None:
     if az_client:
         print("  Using Azure OpenAI for bill parsing.")
     else:
-        print("  Azure OpenAI not configured — using regex fallback.")
+        print("  Azure OpenAI not configured, using regex fallback.")
 
     bills = {}
     for key, search_cfg in config.get("gmail_searches", {}).items():
@@ -826,7 +826,7 @@ def read_bills_from_gmail(billing_month: date, config: dict) -> dict | None:
             amount = _extract_amount_azure(body, label, az_client, az_deployment, snippet=snippet)
             method = "Azure"
         else:
-            # Try snippet first, then full body — snippet is high-signal
+            # Try snippet first, then full body, snippet is high-signal
             amount = _extract_amount_regex(snippet, pattern) if snippet else None
             if amount is None:
                 amount = _extract_amount_regex(body, pattern)
@@ -902,7 +902,7 @@ def build_synopsis_body(
     """Format the synopsis email body (plain text)."""
     labels = config["utility_labels"]
     lines = []
-    lines.append(f"Utility Billing Synopsis — {billing_month.strftime('%B %Y')}")
+    lines.append(f"Utility Billing Synopsis, {billing_month.strftime('%B %Y')}")
     lines.append("=" * 60)
     lines.append("")
     lines.append(f"TENANT OWES THIS MONTH: ${shares['total']:.2f}")
@@ -953,7 +953,7 @@ def build_synopsis_body(
     lines.append(f"  {'TOTAL':22s}  ${shares['total']:>8.2f}")
     lines.append("")
     lines.append("Next step: open your Gmail Drafts folder. The tenant invoice")
-    lines.append("is already composed — review and hit Send when you're ready.")
+    lines.append("is already composed, review and hit Send when you're ready.")
     return "\n".join(lines)
 
 
@@ -974,7 +974,7 @@ def send_synopsis_email(
         print("  ⚠  No synopsis_recipient configured.")
         return False
 
-    subject = f"📋 Billing synopsis — {billing_month.strftime('%B %Y')} (REVIEW)"
+    subject = f"📋 Billing synopsis, {billing_month.strftime('%B %Y')} (REVIEW)"
 
     msg = EmailMessage()
     msg["To"] = to
@@ -1040,7 +1040,7 @@ def is_interactive() -> bool:
     True only if there is a real human on stdin.
 
     Under a scheduler (launchd/cron), stdin is /dev/null. Calling input() there
-    raises EOFError and kills the run — silently, with no notification. This
+    raises EOFError and kills the run, silently, with no notification. This
     exact failure took down a scheduled run in production. Never prompt unless
     this returns True.
     """
@@ -1069,7 +1069,7 @@ def fill_missing(bills: dict, config: dict, interactive: bool = True) -> tuple[d
     if not interactive:
         print("\n  ⚠  Could not auto-read: "
               + ", ".join(labels.get(k, k) for k in missing))
-        print("  ⚠  Unattended run — not prompting. Aborting before any writes.")
+        print("  ⚠  Unattended run, not prompting. Aborting before any writes.")
         return bills, missing
 
     print("\nCould not auto-read these bills:")
@@ -1094,12 +1094,12 @@ def send_alert_email(config: dict, subject: str, body: str) -> bool:
     """
     to = config.get("synopsis_recipient") or config.get("gmail_account")
     if not to:
-        print("  ⚠  No synopsis_recipient configured — cannot send alert.")
+        print("  ⚠  No synopsis_recipient configured, cannot send alert.")
         return False
     try:
         service = _gmail_service(config)
         if service is None:
-            print("  ⚠  Gmail unavailable — cannot send alert.")
+            print("  ⚠  Gmail unavailable, cannot send alert.")
             return False
         msg = EmailMessage()
         msg["To"] = to
@@ -1188,7 +1188,7 @@ def main():
 
     print()
     print("═" * 60)
-    print(f"  Utility Billing — {config.get('property_billing_address', 'Property')}")
+    print(f"  Utility Billing, {config.get('property_billing_address', 'Property')}")
     print(f"  Billing Period : {billing_month.strftime('%B %Y')}")
     print(f"  Send Date      : {send_date.strftime('%m/%d/%Y')}")
     if args.dry_run:    print("  Mode           : DRY RUN")
@@ -1196,7 +1196,7 @@ def main():
 
     interactive = is_interactive() and not args.non_interactive
     if not interactive:
-        print("  Mode           : UNATTENDED (no stdin — will not prompt)")
+        print("  Mode           : UNATTENDED (no stdin, will not prompt)")
 
     # 1. Read bills
     bills = None
@@ -1217,10 +1217,10 @@ def main():
                 f"then re-run:\n"
                 f"    python3 run_billing.py --month {billing_month.strftime('%Y-%m')}\n"
             )
-            print("\n  ⚠  Gmail returned nothing. Unattended — aborting and alerting.")
+            print("\n  ⚠  Gmail returned nothing. Unattended, aborting and alerting.")
             send_alert_email(
                 config,
-                f"🔴 Billing run FAILED — {billing_month.strftime('%B %Y')} (Gmail unreadable)",
+                f"🔴 Billing run FAILED, {billing_month.strftime('%B %Y')} (Gmail unreadable)",
                 detail,
             )
             sys.exit(1)
@@ -1251,11 +1251,11 @@ def main():
             f"billing_config.json.\n\n"
             f"Nothing was written. Nothing was sent. To finish the month manually:\n"
             f"    python3 run_billing.py --month {billing_month.strftime('%Y-%m')}\n"
-            f"(run from a terminal — it will prompt you for the missing amount)\n"
+            f"(run from a terminal, it will prompt you for the missing amount)\n"
         )
         send_alert_email(
             config,
-            f"🟠 Billing run STOPPED — {billing_month.strftime('%B %Y')} "
+            f"🟠 Billing run STOPPED, {billing_month.strftime('%B %Y')} "
             f"({len(unresolved)} bill(s) unreadable)",
             detail,
         )
@@ -1266,7 +1266,7 @@ def main():
         print("\n[DRY RUN] Bills:")
         for k, v in bills.items():
             print(f"  {config['utility_labels'].get(k, k)}: ${v or 0:.2f}")
-        print("\nDry run complete — no spreadsheet writes, no drafts.")
+        print("\nDry run complete, no spreadsheet writes, no drafts.")
         return
 
     # 3. Write to spreadsheet
@@ -1314,7 +1314,7 @@ def main():
     # 7. Gmail drafts (tenant + synopsis)
     service = _gmail_service(config)
     if service is None:
-        print("\n  ⚠  Gmail not authenticated — skipping drafts. Run --auth.")
+        print("\n  ⚠  Gmail not authenticated, skipping drafts. Run --auth.")
         return
 
     if not args.no_tenant_draft:
@@ -1345,7 +1345,7 @@ def main():
             draft_id = create_gmail_draft(
                 service,
                 to=tenant_email,
-                subject=f"{month_long} Utilities Invoice — {prop_addr}",
+                subject=f"{month_long} Utilities Invoice, {prop_addr}",
                 body=body,
                 attachments=[invoice_path],
                 cc=cc,
@@ -1375,7 +1375,7 @@ if __name__ == "__main__":
     try:
         main()
     except SystemExit:
-        # sys.exit() from our own code — already handled + alerted. Pass through.
+        # sys.exit() from our own code, already handled + alerted. Pass through.
         raise
     except Exception:
         # Last-resort net. Any unhandled crash gets emailed instead of dying
@@ -1387,7 +1387,7 @@ if __name__ == "__main__":
             cfg = load_config()
             send_alert_email(
                 cfg,
-                "🔴 Billing run CRASHED — unhandled error",
+                "🔴 Billing run CRASHED, unhandled error",
                 "The utility billing script crashed with an unhandled exception.\n"
                 "Nothing was sent to the tenant.\n\n"
                 f"{tb}\n",
