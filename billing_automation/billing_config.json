@@ -1,5 +1,5 @@
 {
-  "_comment": "Utility Billing Automation — configuration. Replace placeholders with your real values. Secrets (api_key, etc.) should be set via .env / environment variables, NOT committed here.",
+  "_comment": "Utility Billing Automation, configuration. Replace placeholders with your real values. Secrets (api_key, etc.) should be set via .env / environment variables, NOT committed here.",
   "_note_on_splits": "Splits are NOT defined in this config. The script writes raw bill amounts to the spreadsheet, then reads back the spreadsheet's computed Tenant Share row. To change a split, edit the formulas in the spreadsheet itself. The spreadsheet is the single source of truth.",
 
   "tenant_name": "Sample Tenant",
@@ -33,7 +33,7 @@
   "gmail_account": "you@example.com",
 
   "azure_openai": {
-    "_comment": "API key and endpoint should be set via environment variables AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT. Values here are fallbacks only — leave blank in committed config.",
+    "_comment": "API key and endpoint should be set via environment variables AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT. Values here are fallbacks only, leave blank in committed config.",
     "endpoint": "",
     "api_key": "",
     "deployment": "gpt-4o-mini",
