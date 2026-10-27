@@ -33,12 +33,18 @@
   "gmail_account": "you@example.com",
 
   "azure_openai": {
+    "provider": "azure_openai",
     "_comment": "API key and endpoint should be set via environment variables AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT. Values here are fallbacks only, leave blank in committed config.",
     "endpoint": "",
     "api_key": "",
-    "deployment": "gpt-4o-mini",
-    "_deployment_rationale": "Mini-class model is sufficient for the two LLM tasks: (1) extracting a single dollar amount from a marketing-style HTML email; (2) writing 4-6 sentences of variance commentary. Larger models add cost without measurable quality gain for these tasks.",
+    "deployment": "gpt-5.4-mini",
+    "_deployment_rationale": "Matches the live configured Azure deployment. Both LLM tasks have short outputs: a single bill amount and 4-6 sentences of commentary. Provider quality has not been compared in a head-to-head test.",
     "api_version": "2024-12-01-preview"
+  },
+
+  "claude_foundry": {
+    "_comment": "Optional Claude Hosted on Azure deployment. Credentials come only from ANTHROPIC_FOUNDRY_API_KEY and ANTHROPIC_FOUNDRY_RESOURCE. Haiku 4.5 supports the same sampling settings as the Azure baseline.",
+    "deployment": "claude-haiku-4-5"
   },
 
   "analysis": {
@@ -83,7 +89,7 @@
   },
 
   "gmail_searches": {
-    "_comment": "Each utility maps to a Gmail filter that finds its monthly bill. sender = from: filter. must_contain = arbitrary text that must appear in body/subject (use to disambiguate when you have multiple accounts with the same provider). subject_must_contain = restricted to subject. amount_pattern is a regex fallback used when Azure OpenAI is unavailable.",
+    "_comment": "Each utility maps to a Gmail filter that finds its monthly bill. sender = from: filter. must_contain = arbitrary text that must appear in body/subject (use to disambiguate when you have multiple accounts with the same provider). subject_must_contain = restricted to subject. amount_pattern is a regex fallback used when the selected model client cannot be configured, not after a model NULL or request error.",
     "electricity": {
       "sender": "billing@your-electric-provider.example",
       "amount_pattern": "\\$([\\d,]+\\.\\d{2})",

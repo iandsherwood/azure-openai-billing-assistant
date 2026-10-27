@@ -26,7 +26,6 @@ Dependencies:
 import argparse
 import ast
 import base64
-import html as html_lib
 import json
 import mimetypes
 import operator
@@ -40,6 +39,11 @@ import traceback
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
+
+try:
+    from . import llm
+except ImportError:  # python billing_automation/run_billing.py
+    import llm
 
 # ── Third-party ──────────────────────────────────────────────────────────────
 try:
@@ -428,72 +432,22 @@ def analyze_bills(current: dict, history: list[dict], config: dict) -> dict:
 
 
 def azure_commentary(analysis: dict, billing_month: date, config: dict) -> str:
-    """
-    Ask Azure OpenAI to produce a short narrative read on the bills.
-    Returns plain text commentary; empty string if Azure not configured.
-    """
-    client, deployment = _get_azure_client(config)
+    """Generate commentary with the selected provider (legacy function name)."""
+    provider = llm.get_provider(config)
+    client, deployment = _get_llm_client(config)
     if not client:
         return ""
-
-    # Build a compact, structured digest for the model
-    lines = []
-    lines.append(f"Billing month: {billing_month.strftime('%B %Y')}")
-    lines.append(f"Tenant total this month: ${analysis['tenant_total_now']:.2f}")
-    if analysis["tenant_total_prior"] is not None:
-        lines.append(f"Tenant total prior month: ${analysis['tenant_total_prior']:.2f}")
-    lines.append("")
-    lines.append("Per-utility raw amounts and changes:")
-    for u in analysis["per_utility"]:
-        pct = f"{u['pct_change']:+.1f}%" if u["pct_change"] is not None else "new"
-        z = f"z={u['zscore']:+.2f}" if u["zscore"] is not None else "z=n/a"
-        lines.append(f"  - {u['label']}: ${u['current']:.2f} (prior ${u['prior']:.2f}, {pct}, {z})")
-    if analysis["flags"]:
-        lines.append("")
-        lines.append("Auto-flagged anomalies:")
-        for f in analysis["flags"]:
-            lines.append(f"  - [{f['kind']}] {f['detail']}")
-
-    digest = "\n".join(lines)
-    season_hint = {
-        12: "Winter, high heating gas use expected.",
-        1: "Winter, high heating gas use expected.",
-        2: "Winter, high heating gas use expected.",
-        3: "End of heating season, gas should begin dropping.",
-        4: "Spring, gas should drop sharply, water/electric stable.",
-        5: "Spring, heating off, possible AC ramp.",
-        6: "Summer, AC ramps up; gas minimal.",
-        7: "Summer peak, high electricity expected for AC.",
-        8: "Summer peak, high electricity expected for AC.",
-        9: "Early fall, electricity drops, gas still off.",
-        10: "Fall, gas may start rising.",
-        11: "Fall/early winter, gas climbs.",
-    }.get(billing_month.month, "")
-
-    prompt = f"""You are reviewing a landlord's monthly utility bills for a rental property.
-
-Seasonal context: {season_hint}
-
-Bill data:
-{digest}
-
-Write a SHORT (4-6 sentences) candid analysis. Cover:
-1. Are these bills reasonable for the month? Call out anything that looks off.
-2. Possible causes for any flagged anomalies (leak? appliance? weather? service change?).
-3. Whether the landlord should act on anything before sending the invoice to tenants.
-
-Use plain English. No bullet points. No fluff. Be direct."""
-
     try:
-        response = client.chat.completions.create(
-            model=deployment,
-            messages=[{"role": "user", "content": prompt}],
-            max_completion_tokens=400,
-            temperature=0.3,
+        response = llm.complete(
+            client, provider, deployment, llm.commentary_prompt(analysis, billing_month),
+            max_tokens=llm.COMMENTARY_MAX_TOKENS,
+            temperature=llm.COMMENTARY_TEMPERATURE,
         )
-        return response.choices[0].message.content.strip()
+        return response.text.strip()
     except Exception as e:
-        return f"(Azure commentary failed: {e})"
+        name = "Azure" if provider == "azure_openai" else "Claude Foundry"
+        # SDK error bodies may echo private bill content; keep diagnostics bounded.
+        return f"({name} commentary failed: {type(e).__name__})"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -651,78 +605,29 @@ def _decode_body(payload: dict) -> str:
 
 
 def _get_azure_client(config: dict):
-    az = config.get("azure_openai", {})
-    # Prefer environment variables; fall back to config values. Env-var pattern
-    # keeps secrets out of the committed config file.
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or az.get("endpoint", "")
-    api_key  = os.getenv("AZURE_OPENAI_API_KEY")  or az.get("api_key", "")
-    deployment = az.get("deployment", "gpt-4o-mini")
-    if not endpoint or not api_key or "YOUR_" in endpoint or "YOUR_" in api_key:
-        return None, None
+    """Compatibility wrapper for callers that specifically need Azure OpenAI."""
+    return llm.get_client(config, provider="azure_openai")
+
+
+def _get_llm_client(config: dict):
+    if llm.get_provider(config) == "azure_openai":
+        return _get_azure_client(config)
+    return llm.get_client(config)
+
+
+def _extract_amount_azure(body: str, label: str, client, deployment: str,
+                          snippet: str = "", provider: str = "azure_openai") -> float | None:
+    """Extract using the shared prompt/parser (legacy function name)."""
     try:
-        from openai import AzureOpenAI
-        client = AzureOpenAI(
-            azure_endpoint=endpoint,
-            api_key=api_key,
-            api_version=az.get("api_version", "2024-08-01-preview"),
+        response = llm.complete(
+            client, provider, deployment, llm.extraction_prompt(body, label, snippet),
+            max_tokens=llm.EXTRACTION_MAX_TOKENS,
+            temperature=llm.EXTRACTION_TEMPERATURE,
         )
-        return client, deployment
-    except ImportError:
-        print("  ⚠  openai package not installed. Run: pip3 install openai")
-        return None, None
-
-
-def _extract_amount_azure(body: str, label: str, client, deployment: str, snippet: str = "") -> float | None:
-    # Strip <style> and <script> blocks first, they hog truncation budget
-    # without containing any actual bill content.
-    no_style = re.sub(r"<style\b[^>]*>.*?</style>", " ", body, flags=re.DOTALL | re.IGNORECASE)
-    no_style = re.sub(r"<script\b[^>]*>.*?</script>", " ", no_style, flags=re.DOTALL | re.IGNORECASE)
-    # Strip <head> entirely, it's all metadata, no bill content
-    no_head = re.sub(r"<head\b[^>]*>.*?</head>", " ", no_style, flags=re.DOTALL | re.IGNORECASE)
-    # Decode HTML entities before tag-stripping so &#36;251.60 → $251.60
-    clean = html_lib.unescape(no_head)
-    # Replace tags with space (not empty) so adjacent <td>$111.40</td> doesn't merge
-    clean = re.sub(r"<[^>]+>", " ", clean)
-    # Drop zero-width joiners and other invisible padding chars Quantum loves
-    clean = re.sub(r"[​‌‍⁠͏]+", "", clean)
-    clean = re.sub(r"\s+", " ", clean).strip()[:8000]
-    snippet_clean = html_lib.unescape(snippet).strip() if snippet else ""
-
-    # Gmail's snippet is server-generated and usually contains exactly the key
-    # text (e.g., "balance due $251.60"). Putting it up front gives Azure a
-    # high-signal anchor even when the body is mostly layout markup.
-    body_block = (
-        f"GMAIL SNIPPET (high-signal preview): {snippet_clean}\n\n" if snippet_clean else ""
-    ) + f"FULL BODY TEXT:\n{clean}"
-
-    prompt = (
-        f"You are reading a utility bill email for {label}.\n\n"
-        f"Return the SINGLE NUMERIC AMOUNT the customer actually owes/paid for this billing period.\n\n"
-        f"Rules:\n"
-        f"- Pick the bill total, balance due, payment amount, or amount due, NOT retail price, NOT discount/savings, NOT $0.00 placeholders, NOT 'last month' references.\n"
-        f"- If there are multiple amounts (retail, discount, total, etc.), pick the one labeled as 'total', 'amount due', 'balance due', 'amount billed', or 'amount charged'.\n"
-        f"- Reply with ONLY the numeric value: e.g., 57.18 (no dollar sign, no commas, no explanation).\n"
-        f"- If you genuinely cannot determine the amount, reply exactly: NULL\n\n"
-        f"{body_block}"
-    )
-    try:
-        r = client.chat.completions.create(
-            model=deployment,
-            messages=[{"role": "user", "content": prompt}],
-            max_completion_tokens=50, temperature=0,
-        )
-        raw = (r.choices[0].message.content or "").strip()
-        if not raw or raw.upper() == "NULL":
-            return None
-        # Be tolerant of stray markdown, trailing periods, etc.
-        raw = raw.replace("$", "").replace(",", "").strip().rstrip(".")
-        # If the model added explanation despite instructions, pull the first numeric token.
-        m = re.search(r"-?\d+(?:\.\d+)?", raw)
-        if not m:
-            return None
-        return float(m.group(0))
+        return llm.parse_amount(response.text)
     except Exception as e:
-        print(f"  ⚠  Azure parse failed for {label}: {e}")
+        name = "Azure" if provider == "azure_openai" else "Claude Foundry"
+        print(f"  ⚠  {name} parse failed for {label}: {type(e).__name__}")
         return None
 
 
@@ -769,11 +674,13 @@ def read_bills_from_gmail(billing_month: date, config: dict) -> dict | None:
     before = (billing_month.replace(day=28) + timedelta(days=15)).strftime("%Y/%m/%d")
     labels = config.get("utility_labels", {})
 
-    az_client, az_deployment = _get_azure_client(config)
+    provider = llm.get_provider(config)
+    provider_name = "Azure OpenAI" if provider == "azure_openai" else "Claude Foundry"
+    az_client, az_deployment = _get_llm_client(config)
     if az_client:
-        print("  Using Azure OpenAI for bill parsing.")
+        print(f"  Using {provider_name} for bill parsing.")
     else:
-        print("  Azure OpenAI not configured, using regex fallback.")
+        print(f"  {provider_name} not configured, using regex fallback.")
 
     bills = {}
     for key, search_cfg in config.get("gmail_searches", {}).items():
@@ -823,8 +730,9 @@ def read_bills_from_gmail(billing_month: date, config: dict) -> dict | None:
             continue
 
         if az_client:
-            amount = _extract_amount_azure(body, label, az_client, az_deployment, snippet=snippet)
-            method = "Azure"
+            amount = _extract_amount_azure(body, label, az_client, az_deployment,
+                                           snippet=snippet, provider=provider)
+            method = "Azure" if provider == "azure_openai" else "Claude Foundry"
         else:
             # Try snippet first, then full body, snippet is high-signal
             amount = _extract_amount_regex(snippet, pattern) if snippet else None
@@ -1284,8 +1192,9 @@ def main():
         if v > 0:
             print(f"    {config['utility_labels'].get(k, k):22s}  ${v:>8.2f}")
 
-    # 5. Analyze vs. history + Azure commentary
-    print("\n[4/6] Running anomaly analysis + Azure commentary...")
+    # 5. Analyze vs. history + selected provider commentary
+    commentary_name = "Azure" if llm.get_provider(config) == "azure_openai" else "Claude Foundry"
+    print(f"\n[4/6] Running anomaly analysis + {commentary_name} commentary...")
     history = read_history(workbook_path, sheet_name, data_row, config,
                            months_back=config.get("analysis", {}).get("history_window_months", 6))
     current = {
@@ -1301,7 +1210,7 @@ def main():
         print("  ✓ No anomalies flagged.")
     commentary = azure_commentary(analysis, billing_month, config)
     if commentary:
-        print(f"  ✓ Azure commentary obtained ({len(commentary)} chars)")
+        print(f"  ✓ {commentary_name} commentary obtained ({len(commentary)} chars)")
 
     # 6. PDF invoice
     print("\n[5/6] Generating invoice PDF...")

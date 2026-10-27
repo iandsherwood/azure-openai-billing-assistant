@@ -1,6 +1,6 @@
 # Azure OpenAI Billing Assistant
 
-A human-in-the-loop utility billing automation that reads bills from Gmail with **Azure OpenAI**, writes them into a spreadsheet that owns the split logic, flags month-over-month anomalies, and stages outbound emails as drafts for human review before send.
+A human-in-the-loop utility billing automation that reads bills from Gmail, writes them into a spreadsheet that owns the split logic, flags month-over-month anomalies, and stages tenant emails as drafts for human review before send. **Azure OpenAI is the default model provider; Claude through Microsoft Foundry is selectable in the same codebase.**
 
 Built to replace a real, monthly manual process: log into five utility portals, copy amounts into a spreadsheet, calculate the tenant's share, generate a PDF invoice, write an email, attach the PDF, send. Now it's one command.
 
@@ -15,7 +15,7 @@ python3 run_billing.py --month 2026-04
 | Time per billing cycle | ~45 min | ~2 min (review the draft, click Send) |
 | Steps requiring a human | ~20 | 1 (approve + send) |
 | On-time invoices | Inconsistent (depended on me remembering) | Runs unattended on the 10th, alerts me if it can't finish |
-| Azure OpenAI cost per run | n/a | < $0.01 |
+| LLM usage per run | n/a | Five short extraction calls + one commentary call; cost depends on the deployment and email length |
 | Reconciliation errors found | Discovered a $14.79 cumulative discrepancy across 6 months of manual entry | Spreadsheet is the single source of truth; splits can't silently drift |
 
 The system has been running in production since April 2026 and bills a real tenant every month.
@@ -25,6 +25,8 @@ The system has been running in production since April 2026 and bills a real tena
 ## A note on how this was built
 
 Claude wrote most of the Python here. I'm not a software engineer and I take my first Python class this fall, so it seems worth saying rather than letting you assume otherwise.
+
+The selectable-provider update and its offline tests were also built with AI assistance, using Codex.
 
 What I did bring: the Azure OpenAI setup and model choice, the Google Cloud OAuth configuration, the decision to keep the split logic in spreadsheet formulas instead of code, the decision that the system never sends an email on its own, and the diagnosis of the scheduler failure described below. The code was the easy part to get. The decisions about what this thing should do when it's uncertain took longer, and they're the only parts I'd defend.
 
@@ -44,7 +46,7 @@ LLMs are very good at this kind of extraction.
 Gmail (5 utility bills)
         │
         ▼
-Azure OpenAI extracts dollar amounts from messy HTML emails
+Selected model provider extracts dollar amounts from messy HTML emails
         │
         ▼
 Raw amounts written to Excel spreadsheet (single source of truth for splits)
@@ -56,7 +58,7 @@ Spreadsheet formulas compute tenant share (re-evaluated by a safe Python AST wal
 6 months of history compared → MoM% + z-score anomaly detection
         │
         ▼
-Azure OpenAI writes 4–6 sentences of variance commentary
+Selected model provider writes 4–6 sentences of variance commentary
         │
         ▼
 PDF invoice generated (ReportLab)
@@ -69,30 +71,57 @@ PDF invoice generated (ReportLab)
 
 ```mermaid
 flowchart LR
-    A[Gmail API<br/>5 utility senders] --> B[Azure OpenAI<br/>amount extraction]
+    A[Gmail API<br/>5 utility senders] --> B[Azure OpenAI or Claude<br/>amount extraction]
     B --> C[Excel spreadsheet<br/>raw amounts + split formulas]
     C --> D[Formula evaluator<br/>safe AST walker]
     D --> E[Historical analysis<br/>MoM% + z-score]
-    E --> F[Azure OpenAI<br/>variance commentary]
+    E --> F[Azure OpenAI or Claude<br/>variance commentary]
     F --> G[ReportLab<br/>PDF invoice]
     G --> H[Synopsis email<br/>→ landlord inbox]
     G --> I[Gmail draft<br/>→ Drafts folder, UNSENT]
     I -.human review.-> J[Landlord clicks Send]
 ```
 
-## Why Azure OpenAI?
+## Model tasks
 
-Two LLM-shaped problems, both solved with `gpt-4o-mini`:
+The live configuration currently selects **`gpt-5.4-mini`** for both extraction and commentary.
+
+The two model tasks are:
 
 | Task | Why an LLM | Why mini-class |
 |---|---|---|
-| Extract a single dollar amount from a ~5KB HTML email padded with tracking pixels and CSS | Five providers, five formats, three of which use marketing-template emails where the amount is buried deep in HTML tables. A regex-only approach broke once per quarter. | The task is trivially within mini-class capability. Larger models add cost without measurable quality gain. |
-| Write 4–6 sentences of plain-language variance commentary on this month's anomalies | Numerical anomaly detection is easy; *explaining* a 30% electricity drop in a way a non-finance reader will understand requires a narrative model. | Same reasoning, short structured prose, mini is plenty. |
+| Extract a single dollar amount from a ~5KB HTML email padded with tracking pixels and CSS | Five providers use different email formats, often with the amount buried in HTML tables. | A narrow extraction task with a 50-token output limit keeps requests small. |
+| Write 4–6 sentences of plain-language variance commentary on this month's anomalies | The script computes the numerical changes; the model turns those figures into readable commentary. | Short commentary has a 400-token output limit. |
 
-Azure-specific:
-- **Deployment pinning** (`api_version: 2024-12-01-preview` + specific model deployment name) gives predictable behavior across runs. No surprise upgrades.
-- **Per-call budget** is tiny (an average bill batch costs less than a cent).
-- **Fallback**: if the API is unavailable, the script falls back to regex extraction from `amount_pattern` in config. Used to fully replace regex; downgraded to "safety net" once Azure proved reliable.
+The Azure API version (`2024-12-01-preview`) and deployment name are explicit configuration values. Regex extraction remains available when a model client cannot be configured. A model response of `NULL` or a failed extraction request remains an unread amount; it is not silently replaced by a regex guess.
+
+## Switching model providers
+
+`billing_automation/billing_config.json` selects the provider for both extraction and commentary:
+
+```json
+{
+  "azure_openai": {
+    "provider": "azure_openai",
+    "deployment": "gpt-5.4-mini",
+    "api_version": "2024-12-01-preview"
+  },
+  "claude_foundry": {
+    "deployment": "claude-haiku-4-5"
+  }
+}
+```
+
+Keep the other billing settings when editing these fields. Set `azure_openai.provider` to `claude_foundry` to select Claude, or `azure_openai` to switch back. Omitting the provider setting also selects Azure OpenAI.
+
+| Provider setting | Client | Required environment variables |
+|---|---|---|
+| `azure_openai` | `AzureOpenAI` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY` |
+| `claude_foundry` | `AnthropicFoundry` | `ANTHROPIC_FOUNDRY_RESOURCE`, `ANTHROPIC_FOUNDRY_API_KEY` |
+
+Claude requires an existing **Hosted on Azure** Foundry deployment in an eligible paid subscription. Set `claude_foundry.deployment` to its actual deployment name and `ANTHROPIC_FOUNDRY_RESOURCE` to the resource name, not a URL. Credentials belong in the process environment, never in committed configuration. The included Haiku 4.5 configuration supports the existing temperature settings.
+
+Both providers use the same prompts, token limits, temperatures (0 for extraction, 0.3 for commentary), numeric/`NULL` parsing, and regex fallback rules. The spreadsheet, invoice, Gmail, and scheduler workflow stays the same. The switch and SDK request format are covered by offline tests; Claude has not been deployed or evaluated on the real bills. No head-to-head results are claimed.
 
 ## The human-in-the-loop pattern
 
@@ -147,7 +176,7 @@ When run on the demo spreadsheet shipped in this repo, the synopsis email reads 
 
 ### Prerequisites
 - Python 3.10+
-- An Azure OpenAI resource (free tier is fine for this volume)
+- An Azure OpenAI resource and model deployment
 - A Google Cloud project with the Gmail API enabled
 
 ### Install
@@ -157,12 +186,15 @@ git clone https://github.com/iandsherwood/azure-openai-billing-assistant.git
 cd azure-openai-billing-assistant
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your real Azure OpenAI endpoint + key
+# Edit .env with your real provider credentials, then export them:
+set -a
+source .env
+set +a
 ```
 
 ### Configure
 
-1. **Azure OpenAI**: fill `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` in `.env`.
+1. **Model provider**: Azure OpenAI is the default. Set its endpoint/key in the process environment and its deployment name in `billing_automation/billing_config.json`. For Claude, use the settings above. Python does not automatically load `.env`; export it in your shell as shown, or supply the variables to the scheduled process.
 2. **Gmail OAuth**: follow `billing_automation/GOOGLE_CLOUD_SETUP.txt` (one-time, ~10 minutes). Drop the resulting `credentials.json` into `billing_automation/`. Then:
    ```bash
    cd billing_automation && python3 run_billing.py --auth
@@ -189,9 +221,9 @@ Useful flags:
 
 - **OAuth scope is broad.** Gmail's `compose` and `send` scopes are needed for drafts. There's no narrower scope for "create drafts only," so the token grants more than I'd like. I mitigate this by keeping `gmail_token.pickle` permission-restricted and out of the repo.
 - **Single Gmail account assumption.** If you have utility bills coming to multiple inboxes, you'd need to run the script once per account.
-- **No retry/backoff on Azure failures.** If the LLM call fails, the script falls back to regex extraction for that one bill. No queue, no retry. For a once-a-month script this is fine; for a production system it wouldn't be.
+- **Model failures leave bills unread.** SDK retry behavior applies, but the billing script adds no retry queue. A failed request or `NULL` response does not trigger regex fallback; an unattended run stops when a required amount is missing.
 - **Spreadsheet is the source of truth.** That's a feature, not a bug, but it does mean the script and the spreadsheet have to agree on column letters and row offsets. Misalignment is a silent failure mode.
-- **No tests.** This is a personal-use script. If this were going into production I'd add unit tests for the AST formula evaluator at minimum.
+- **Focused offline test coverage.** Provider selection, unchanged prompts/settings, parsing, fallback boundaries, and the Anthropic SDK request format are tested without real API calls. This is not an end-to-end production test suite; the AST formula evaluator still needs dedicated coverage. Run `python3 -m unittest discover -s tests -v`.
 
 ## What's intentionally not here
 
