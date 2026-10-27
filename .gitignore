@@ -7,6 +7,11 @@ billing_automation/gmail_token.pickle
 billing_automation/*.pickle
 billing_automation/secrets/
 
+# Private model comparison corpus, answer keys, prompts, and blind ratings
+.comparison-data/
+**/.comparison-data/
+*.private.json
+
 # Generated outputs
 billing_automation/*.pdf
 *.pdf
