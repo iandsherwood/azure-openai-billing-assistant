@@ -4,3 +4,5 @@ reportlab>=4.0.0
 google-api-python-client>=2.0.0
 google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.2.0
+# Last pre-1.x SDK: AnthropicFoundry with explicit temperature support.
+anthropic==0.125.0
